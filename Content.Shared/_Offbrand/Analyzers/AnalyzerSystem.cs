@@ -53,14 +53,36 @@ public sealed partial class AnalyzerSystem : EntitySystem
 
         if (!analyzer.Comp1.IsUpdating)
         {
+            if (!analyzer.Comp1.AutoRelink)
+            {
+                analyzer.Comp1.Target = null;
+                analyzer.Comp1.ActualTarget = null;
+                Dirty(analyzer, analyzer.Comp1);
+            }
             RaiseLocalEvent(analyzer, ref after);
             return;
         }
 
-        var evt = new AnalyzerUpdatedEvent(target);
+        var actual = new AnalyzerActualTargetEvent(target, target);
+        RaiseLocalEvent(analyzer, ref actual);
+
+        if (actual.ActualTarget != analyzer.Comp1.ActualTarget)
+        {
+            analyzer.Comp1.ActualTarget = actual.ActualTarget;
+            Dirty(analyzer, analyzer.Comp1);
+
+            var updated = new AnalyzerActualTargetUpdatedEvent();
+            RaiseLocalEvent(analyzer, ref updated);
+        }
+
+        if (actual.ActualTarget is not { } actualTarget)
+            return;
+
+        var evt = new AnalyzerUpdatedEvent(actualTarget);
         RaiseLocalEvent(analyzer, ref evt);
         RaiseLocalEvent(analyzer, ref after);
     }
+
 
     public void Analyze(Entity<AnalyzerComponent?> analyzer, EntityUid? target)
     {
@@ -68,6 +90,7 @@ public sealed partial class AnalyzerSystem : EntitySystem
             return;
 
         analyzer.Comp.Target = target;
+        analyzer.Comp.ActualTarget = null;
         analyzer.Comp.ShouldUpdate = target is not null;
         Dirty(analyzer);
 

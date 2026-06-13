@@ -5,6 +5,7 @@ using Content.Shared.Interaction;
 using Content.Shared.Popups;
 using Content.Shared.Whitelist;
 using Robust.Shared.Audio.Systems;
+using Robust.Shared.Network;
 using Robust.Shared.Serialization;
 
 namespace Content.Shared._Offbrand.Analyzers;
@@ -17,6 +18,7 @@ public sealed partial class HandheldAnalyzerSystem : EntitySystem
     [Dependency] private SharedPopupSystem _popup = default!;
     [Dependency] private AnalyzerSystem _analyzer = default!;
     [Dependency] private SharedUserInterfaceSystem _userInterface = default!;
+    [Dependency] private readonly INetManager _net = default!;
 
     public override void Initialize()
     {
@@ -73,7 +75,7 @@ public sealed partial class HandheldAnalyzerSystem : EntitySystem
             _audio.PlayPredicted(analyzer.Comp.EndScanSound, analyzer, args.User);
 
         _analyzer.Analyze(analyzer.Owner, args.Target);
-        _userInterface.OpenUi(analyzer.Owner, analyzer.Comp.UiKey, args.User, true);
+        _userInterface.OpenUi(analyzer.Owner, analyzer.Comp.UiKey, args.User);
     }
 
     private void OnOpenBui(Entity<HandheldAnalyzerComponent> analyzer, ref OpenBoundInterfaceMessage args)

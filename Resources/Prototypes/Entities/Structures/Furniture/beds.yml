@@ -63,6 +63,7 @@
     noRot: true
   - type: Anchorable
   - type: Pullable
+  - type: StationaryAnalyzerStrap # Offbrand
 
 
 - type: entity

@@ -27,10 +27,16 @@ public sealed partial class VitalsData
     public int HeartRate;
 
     [DataField]
+    public float HeartStrain;
+
+    [DataField]
     public int Etco2;
 
     [DataField]
     public int RespiratoryRate;
+
+    [DataField]
+    public float RespiratoryRateModifier;
 
     [DataField]
     public float Spo2;

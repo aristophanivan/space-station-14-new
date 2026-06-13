@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Numerics;
 using System.Threading;
+using Content.Client._Offbrand.Examine; // Offbrand - BUIs in examine
 using Content.Client.Verbs;
 using Content.Shared.Examine;
 using Content.Shared.IdentityManagement;
@@ -47,6 +48,7 @@ namespace Content.Client.Examine
         private readonly Dictionary<Enum, RichTextLabel> _elaborateTooltipLabels = new();
         private BoxContainer? _elaborateTooltipBox;
         // End Offbrand - examine elaboration
+        private BoxContainer? _embeddedUserInterfaceBox; // Offbrand - BUIs in examine
 
         public override void Initialize()
         {
@@ -252,6 +254,7 @@ namespace Content.Client.Examine
 
             // Actually open the tooltip.
             _examineTooltipOpen = new Popup { MaxWidth = 400 };
+            _examineTooltipOpen.OnPopupHide += CloseTooltip; // Offbrand - BUIs in examine
             _userInterfaceManager.ModalRoot.AddChild(_examineTooltipOpen);
             var panel = new PanelContainer() { Name = "ExaminePopupPanel" };
             panel.AddStyleClass(StyleClassEntityTooltip);
@@ -380,6 +383,32 @@ namespace Content.Client.Examine
             {
                 totalVerbs.UnionWith(verbs);
             }
+
+            // Begin Offbrand - BUIs in examine
+            var embeddedUserInterfaceBox = new BoxContainer
+            {
+                Name = "ExamineEmbeddedUserInterfaceVbox",
+                Orientation = LayoutOrientation.Vertical,
+                MaxWidth = _examineTooltipOpen?.MaxWidth ?? 400,
+                Margin = new Thickness(4, 4, 0, 4)
+            };
+
+            _embeddedUserInterfaceBox = embeddedUserInterfaceBox;
+            vBox.AddChild(embeddedUserInterfaceBox);
+
+            var embedEvent = new ExaminableUserInterfaceRequestEvent(
+                player,
+                target,
+                embeddedUserInterfaceBox,
+                IsInDetailsRange(player, target));
+            RaiseLocalEvent(target, ref embedEvent);
+
+            if (!embeddedUserInterfaceBox.Children.Any())
+            {
+                vBox.RemoveChild(embeddedUserInterfaceBox);
+                _embeddedUserInterfaceBox = null;
+            }
+            // End Offbrand - BUIs in examine
 
             AddVerbsToTooltip(totalVerbs);
         }
@@ -511,6 +540,17 @@ namespace Content.Client.Examine
 
         private void CloseTooltip()
         {
+            // Begin Offbrand - BUIs in examine
+            if (_embeddedUserInterfaceBox != null &&
+                _playerManager.LocalEntity is { } player &&
+                _examinedEntity.Valid)
+            {
+                var embedCloseEvent = new ExaminableUserInterfaceCloseEvent(player);
+                RaiseLocalEvent(_examinedEntity, ref embedCloseEvent);
+                _embeddedUserInterfaceBox = null;
+            }
+            // End Offbrand - BUIs in examine
+
             if (_examineTooltipOpen != null)
             {
                 foreach (var control in _examineTooltipOpen.Children)

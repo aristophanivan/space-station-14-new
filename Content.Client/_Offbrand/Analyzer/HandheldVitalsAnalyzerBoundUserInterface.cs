@@ -6,11 +6,11 @@ using Robust.Client.UserInterface;
 namespace Content.Client._Offbrand.Analyzer;
 
 [UsedImplicitly]
-public sealed class VitalsAnalyzerBoundUserInterface : BoundUserInterface
+public sealed class HandheldVitalsAnalyzerBoundUserInterface : BoundUserInterface
 {
     private VitalsAnalyzerWindow? _window;
 
-    public VitalsAnalyzerBoundUserInterface(EntityUid owner, Enum uiKey) : base(owner, uiKey)
+    public HandheldVitalsAnalyzerBoundUserInterface(EntityUid owner, Enum uiKey) : base(owner, uiKey)
     {
     }
 
@@ -32,9 +32,9 @@ public sealed class VitalsAnalyzerBoundUserInterface : BoundUserInterface
         _window.Title = Identity.Name(Owner, EntMan);
         if (EntMan.TryGetComponent<VitalsAnalyzerComponent>(Owner, out var vitalsAnalyzer) &&
             vitalsAnalyzer.Data is { } data &&
-            EntMan.TryGetComponent<AnalyzerComponent>(Owner, out var analyzer) && analyzer.Target is { } target)
+            EntMan.TryGetComponent<AnalyzerComponent>(Owner, out var analyzer) && analyzer.ActualTarget is { } actualTarget)
         {
-            _window.VitalsAnalyzer.Update((data, target, analyzer.IsUpdating));
+            _window.VitalsAnalyzer.Update((data, actualTarget, analyzer.IsUpdating));
         }
         else
         {

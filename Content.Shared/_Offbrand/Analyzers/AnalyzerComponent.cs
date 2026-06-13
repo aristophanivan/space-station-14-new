@@ -24,11 +24,23 @@ public sealed partial class AnalyzerComponent : Component
     public EntityUid? Target;
 
     [DataField, AutoNetworkedField]
+    public EntityUid? ActualTarget;
+
+    [DataField, AutoNetworkedField]
     public float? ScanRange = 3f;
+
+    [DataField]
+    public bool AutoRelink = true;
 }
 
 [ByRefEvent]
 public readonly record struct AnalyzerUpdatedEvent(EntityUid Target);
+
+[ByRefEvent]
+public record struct AnalyzerActualTargetEvent(EntityUid Target, EntityUid? ActualTarget);
+
+[ByRefEvent]
+public record struct AnalyzerActualTargetUpdatedEvent;
 
 [ByRefEvent]
 public readonly record struct AfterAnalyzerUpdatedEvent;
