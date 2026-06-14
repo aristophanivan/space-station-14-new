@@ -21,8 +21,6 @@
   - type: PopupOnAppliedStatusEffect
     message: fracture-applied
     visualType: MediumCaution
-  - type: ExaminableStatusEffect
-    message: fracture-examine
   - type: HandIncapacitationStatusEffect
   - type: PalpationDescription
     description: palpation-broken-bone
@@ -40,8 +38,6 @@
   - type: PopupOnAppliedStatusEffect
     message: cut-tendon-applied
     visualType: MediumCaution
-  - type: ExaminableStatusEffect
-    message: cut-tendon-examine
   - type: HandIncapacitationStatusEffect
   - type: PalpationDescription
     description: palpation-cut-tendon
@@ -71,7 +67,5 @@
   - type: PopupOnAppliedStatusEffect
     message: arterial-bleeding-applied
     visualType: MediumCaution
-  - type: ExaminableStatusEffect
-    message: arterial-bleeding-examine
   - type: PalpationDescription
     description: palpation-arterial-bleeding

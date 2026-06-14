@@ -121,6 +121,9 @@
     wound: WoundFracture
     woundProbability: 0.03
   - type: IVTarget
+    permissibleContainers:
+      components:
+      - CryoPod
 
 - type: entity
   abstract: true

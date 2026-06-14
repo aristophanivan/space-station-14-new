@@ -1,4 +1,5 @@
 using Content.Shared._Offbrand.Wounds;
+using Content.Shared._Offbrand.Organs;
 using Content.Shared.Body.Components;
 using Content.Shared.Body.Systems;
 using Content.Shared.Chemistry.EntitySystems;
@@ -8,16 +9,20 @@ using Content.Shared.DragDrop;
 using Content.Shared.FixedPoint;
 using Content.Shared.IdentityManagement;
 using Content.Shared.Popups;
+using Content.Shared.Random.Helpers;
 using Content.Shared.Verbs;
-using Robust.Shared.GameStates;
+using Content.Shared.Whitelist;
+using Robust.Shared.Containers;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Systems;
+using Robust.Shared.Random;
 using Robust.Shared.Timing;
 
 namespace Content.Shared._Offbrand.IV;
 
 public sealed partial class IVSystem : EntitySystem
 {
+    [Dependency] private EntityWhitelistSystem _entityWhitelist = default!;
     [Dependency] private IGameTiming _timing = default!;
     [Dependency] private ItemSlotsSystem _itemSlots = default!;
     [Dependency] private SharedAppearanceSystem _appearance = default!;
@@ -26,6 +31,8 @@ public sealed partial class IVSystem : EntitySystem
     [Dependency] private SharedJointSystem _joint = default!;
     [Dependency] private SharedPopupSystem _popup = default!;
     [Dependency] private SharedSolutionContainerSystem _solutionContainer = default!;
+    [Dependency] private WoundableOrganSystem _woundableOrgan = default!;
+    [Dependency] private WoundableSystem _woundable = default!;
 
     public override void Initialize()
     {
@@ -37,6 +44,9 @@ public sealed partial class IVSystem : EntitySystem
 
         SubscribeLocalEvent<IVSourceComponent, IVConnectDoAfterEvent>(OnConnectDoAfter);
         SubscribeLocalEvent<IVSourceComponent, IVDisconnectDoAfterEvent>(OnDisconnectDoAfter);
+
+        SubscribeLocalEvent<IVSourceComponent, EntGotInsertedIntoContainerMessage>(OnSourceInsertedIntoContainer);
+        SubscribeLocalEvent<IVTargetComponent, EntGotInsertedIntoContainerMessage>(OnTargetInsertedIntoContainer);
 
         SubscribeLocalEvent<IVSourceComponent, GetVerbsEvent<Verb>>(OnSourceGetVerbs);
         SubscribeLocalEvent<IVTargetComponent, GetVerbsEvent<Verb>>(OnTargetGetVerbs);
@@ -106,6 +116,25 @@ public sealed partial class IVSystem : EntitySystem
         StopIV(ent.AsNullable(), target, args.Args.User);
     }
 
+    private void OnSourceInsertedIntoContainer(Entity<IVSourceComponent> ent, ref EntGotInsertedIntoContainerMessage args)
+    {
+        if (_timing.ApplyingState)
+            return;
+
+        RipOutIV(ent);
+    }
+
+    private void OnTargetInsertedIntoContainer(Entity<IVTargetComponent> ent, ref EntGotInsertedIntoContainerMessage args)
+    {
+        if (_timing.ApplyingState)
+            return;
+
+        if (_entityWhitelist.IsWhitelistPass(ent.Comp.PermissibleContainers, args.Container.Owner))
+            return;
+
+        RipOutIV(ent);
+    }
+
     private void TickIV(Entity<IVSourceComponent> source, Entity<IVTargetComponent, BloodstreamComponent> target)
     {
         if (_itemSlots.GetItemOrNull(source, source.Comp.SlotName) is not { } contained)
@@ -162,7 +191,7 @@ public sealed partial class IVSystem : EntitySystem
                     sourcePhysics.LocalCenter, targetPhysics.LocalCenter,
                     id: target.Comp.IVJointID);
 
-            joint.MaxLength = joint.Length + 0.2f;
+            joint.MaxLength = 1.5f;
             joint.MinLength = 0f;
             joint.Stiffness = 0f;
         }
@@ -184,17 +213,62 @@ public sealed partial class IVSystem : EntitySystem
             user
         );
 
-        source.Comp.IVTarget = null;
+        DisconnectIV((source, source.Comp), (target, target.Comp));
+    }
 
+    private void DisconnectIV(Entity<IVSourceComponent> source, Entity<IVTargetComponent> target)
+    {
+        source.Comp.IVTarget = null;
         if (target.Comp.IVJointID is { } joint)
             _joint.RemoveJoint(target, joint);
 
         target.Comp.IVSource = null;
         target.Comp.IVJointID = null;
 
-        SetLock((source, source.Comp), false);
+        SetLock(source, false);
         Dirty(source);
         Dirty(target);
+    }
+
+    public bool RipOutIV(EntityUid ent)
+    {
+        if (TryComp<IVTargetComponent>(ent, out var targetComp) && targetComp.IVSource is { } source)
+            return RipOutIV(source, (ent, targetComp));
+
+        if (TryComp<IVSourceComponent>(ent, out var sourceComp) && sourceComp.IVTarget is { } target)
+            return RipOutIV((ent, sourceComp), target);
+
+        return false;
+    }
+
+    public bool RipOutIV(Entity<IVSourceComponent?> source, Entity<IVTargetComponent?> target)
+    {
+        if (!Resolve(source, ref source.Comp) || !Resolve(target, ref target.Comp))
+            return false;
+
+        if (source.Comp.IVTarget != target.Owner || target.Comp.IVSource != source.Owner)
+            return false;
+
+        TryAddRipWound((target, target.Comp));
+        DisconnectIV((source, source.Comp), (target, target.Comp));
+        return true;
+    }
+
+    private void TryAddRipWound(Entity<IVTargetComponent> target)
+    {
+        var organs = _woundableOrgan.GetWoundableOrgans(target);
+        if (organs.Count == 0)
+            return;
+
+        var seed = SharedRandomExtensions.HashCodeCombine((int)_timing.CurTick.Value, GetNetEntity(target).Id);
+        var rand = new RobustRandom();
+        rand.SetSeed(seed);
+
+        var organ = rand.Pick(organs);
+        if (!TryComp<WoundableComponent>(organ, out var woundable))
+            return;
+
+        _woundable.TryWound((organ, woundable), target.Comp.RipOutWound, unique: true);
     }
 
     private void TryStartIV(Entity<IVSourceComponent?> source, Entity<IVTargetComponent?> target, EntityUid user)
@@ -254,13 +328,7 @@ public sealed partial class IVSystem : EntitySystem
         if (ent.Comp.IVTarget is not { } target || !TryComp<IVTargetComponent>(target, out var targetComp))
             return;
 
-        if (targetComp.IVJointID is { } joint)
-            _joint.RemoveJoint(target, joint);
-
-        targetComp.IVSource = null;
-        targetComp.IVJointID = null;
-        SetLock(ent, false);
-        Dirty(target, targetComp);
+        RipOutIV(ent.AsNullable(), (target, targetComp));
     }
 
     private void OnTargetShutdown(Entity<IVTargetComponent> ent, ref ComponentShutdown args)
@@ -268,12 +336,7 @@ public sealed partial class IVSystem : EntitySystem
         if (ent.Comp.IVSource is not { } source || !TryComp<IVSourceComponent>(source, out var sourceComp))
             return;
 
-        if (ent.Comp.IVJointID is { } joint)
-            _joint.RemoveJoint(ent, joint);
-
-        sourceComp.IVTarget = null;
-        SetLock((source, sourceComp), false);
-        Dirty(source, sourceComp);
+        RipOutIV((source, sourceComp), ent.AsNullable());
     }
 
     private void OnSourceGetVerbs(Entity<IVSourceComponent> ent, ref GetVerbsEvent<Verb> args)
